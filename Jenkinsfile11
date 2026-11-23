@@ -1,42 +1,81 @@
 pipeline {
-  agent any
+    agent any
 
-  stages {
-      stage('Build') {
-      agent {
-        docker { image 'image 'python:3.9-slim'' }
-      }
-      steps {
-            // Run the Django server in the foreground
-            sh 'pip install django==3.2'
-            sh 'python3 manage.py check' 
-            echo 'Django server started. Proceeding to next stage...'
-      }
+    options {
+        skipDefaultCheckout(true)
     }
 
-    stage('Deploy') {
-      steps {
-        // Build the image
-        sh 'docker build -t todo .'
-        
-        // Run the container with a specific name (e.g., 'todo_container')
-        sh 'docker run -d -p 8000:8000 --name todo_container todo'
-      }
-      post {
-        always {
-          echo 'Waiting for 2 minutes before stopping and deleting containers...'
-          // Sleep for 2 minutes before stopping and deleting containers
-          sleep 120
+    stages {
+        stage('Code Checkout') {
+            steps {
+                script {
+                    def scmInfo = checkout scm
+                    def remoteUrl = scmInfo.GIT_URL ?: sh(
+                        script: 'git config --get remote.origin.url',
+                        returnStdout: true
+                    ).trim()
+                    def branchName = scmInfo.GIT_BRANCH ?: env.BRANCH_NAME ?: 'unknown'
 
-          // Stop the container using its name
-          echo 'Stopping container...'
-          sh 'docker stop todo_container'
+                    env.REPOSITORY_URL = remoteUrl
+                    env.REPOSITORY_NAME = remoteUrl.tokenize('/').last().replaceFirst(/\.git$/, '')
+                    env.CURRENT_BRANCH = branchName.replaceFirst(/^origin\//, '')
 
-          // Remove the container
-          echo 'Removing container...'
-          sh 'docker rm todo_container'
+                    echo "Repository: ${env.REPOSITORY_NAME}"
+                    echo "Remote URL: ${env.REPOSITORY_URL}"
+                    echo "Current branch: ${env.CURRENT_BRANCH}"
+                }
+
+                sh 'ls -la'
+            }
         }
-      }
+
+        stage('Build') {
+            agent {
+                docker {
+                    image 'python:3.9-slim'
+                    reuseNode true
+                }
+            }
+            steps {
+                sh 'pip install django==3.2'
+                sh 'python3 manage.py check'
+                echo 'Build checks completed.'
+            }
+        }
+
+        stage('Deploy') {
+            when {
+                expression { env.CURRENT_BRANCH == 'develop' }
+            }
+            steps {
+                sh 'docker rm -f todo_container1 todo_container2 || true'
+                sh 'docker build -t todo .'
+                sh 'docker run -d --name todo_container1 -p 8000:8000 todo'
+                sh 'docker run -d --name todo_container2 -p 8001:8000 todo'
+
+                sh '''
+                    docker ps --filter "name=todo_container" --format "{{.Names}} {{.Status}}"
+                    test "$(docker inspect -f "{{.State.Running}}" todo_container1)" = "true"
+                    test "$(docker inspect -f "{{.State.Running}}" todo_container2)" = "true"
+                '''
+            }
+            post {
+                always {
+                    sh 'docker rm -f todo_container1 todo_container2 || true'
+                }
+            }
+        }
     }
-  }
+
+    post {
+        success {
+            echo 'Pipeline executed successfully'
+        }
+        failure {
+            echo 'Pipeline execution failed'
+        }
+        always {
+            echo 'Pipeline execution completed'
+        }
+    }
 }
