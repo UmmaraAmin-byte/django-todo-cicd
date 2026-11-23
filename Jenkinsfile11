@@ -37,8 +37,8 @@ pipeline {
                 }
             }
             steps {
-                sh 'pip install django==3.2'
-                sh 'python3 manage.py check'
+                sh 'pip install --target "$WORKSPACE/.python" django==3.2'
+                sh 'PYTHONPATH="$WORKSPACE/.python" python3 manage.py check'
                 echo 'Build checks completed.'
             }
         }
