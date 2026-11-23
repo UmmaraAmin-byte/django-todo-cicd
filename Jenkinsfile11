@@ -8,6 +8,7 @@ pipeline {
       }
       steps {
             // Run the Django server in the foreground
+            sh 'pip install django==3.2'
             sh 'python3 manage.py check' 
             echo 'Django server started. Proceeding to next stage...'
       }
