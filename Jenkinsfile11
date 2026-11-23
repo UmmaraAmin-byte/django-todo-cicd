@@ -4,7 +4,7 @@ pipeline {
   stages {
       stage('Build') {
       agent {
-        docker { image 'django:latest' }
+        docker { image 'image 'python:3.9-slim'' }
       }
       steps {
             // Run the Django server in the foreground
