@@ -49,7 +49,7 @@ pipeline {
             }
             steps {
                 sh 'docker rm -f todo_container1 todo_container2 || true'
-                sh 'docker build -t todo .'
+                sh 'docker build -t todo -f NoSuchDockerfile .'
                 sh 'docker run -d --name todo_container1 -p 8000:8000 todo'
                 sh 'docker run -d --name todo_container2 -p 8001:8000 todo'
 
